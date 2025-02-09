@@ -47,4 +47,4 @@
 - **Risks:**
   - Potential legal and ethical considerations in web scraping and email extraction.
   - Changes in website structures or anti-scraping measures may affect the tool's effectiveness.
-  - Dependence on external websites and data availability.
+  - Dependence on external websites and data availability. 
