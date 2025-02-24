@@ -100,7 +100,7 @@ function App() {
     setError(null);
     
     try {
-      const response = await fetch('http://localhost:5002/api/v1/analyze', {
+      const response = await fetch('http://localhost:5004/api/v1/analyze', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
