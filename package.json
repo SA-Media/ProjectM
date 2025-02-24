@@ -1,0 +1,21 @@
+{
+  "name": "seo-backlink-builder",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  },
+  "dependencies": {
+    "18": "0.0.0",
+    "chromedriver": "^133.0.1",
+    "openai": "^4.85.1",
+    "selenium-webdriver": "^4.28.1"
+  }
+}
