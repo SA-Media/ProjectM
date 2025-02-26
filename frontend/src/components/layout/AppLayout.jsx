@@ -58,44 +58,43 @@ const MainContainer = styled.div`
   justify-content: center; // Center the content horizontally
 `;
 
-const SidebarWrapper = styled.aside`
-  width: ${props => props.isOpen ? '280px' : '0'};
-  background-color: white;
-  border-right: 1px solid rgba(0, 0, 0, 0.1);
+const Sidebar = styled.aside`
   position: fixed;
-  top: ${HeaderHeight}; // Position below header
   left: 0;
-  bottom: 0;
+  top: ${HeaderHeight};
+  height: calc(100vh - ${HeaderHeight} - 50px); // Adjusted for footer
+  width: 300px;
+  background-color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(5px);
+  border-right: 1px solid rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease-in-out;
+  transform: translateX(${props => props.$isOpen ? '0' : '-100%'});
   z-index: 100;
   overflow-y: auto;
-  transition: width 0.3s ease;
-  box-shadow: ${props => props.isOpen ? theme.shadows.md : 'none'};
+  box-shadow: ${props => props.$isOpen ? theme.shadows.md : 'none'};
 `;
 
 const SidebarToggle = styled.button`
   position: fixed;
-  left: ${props => props.isOpen ? '280px' : '0'};
-  top: calc(${HeaderHeight} + 10px); // Position relative to header
-  background-color: white;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-left: ${props => props.isOpen ? '1px solid rgba(0, 0, 0, 0.1)' : 'none'};
-  border-radius: 0 8px 8px 0;
-  padding: 8px;
+  left: ${props => props.$isOpen ? '300px' : '0'};
+  top: calc(${HeaderHeight} + 20px);
+  z-index: 150;
+  background-color: ${theme.colors.primary.yellow};
+  color: ${theme.colors.text.primary};
+  border: none;
+  border-radius: 0 ${theme.borderRadius.md} ${theme.borderRadius.md} 0;
+  padding: 0.5rem;
+  cursor: pointer;
+  transition: left 0.3s ease-in-out;
+  box-shadow: ${theme.shadows.md};
+  height: 40px;
+  width: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  transition: left 0.3s ease;
-  z-index: 101;
-  box-shadow: ${theme.shadows.sm};
   
   &:hover {
-    background-color: #f8f8f8;
-  }
-  
-  /* Hide on very small screens */
-  @media (max-width: 480px) {
-    display: none;
+    background-color: ${theme.colors.secondary.yellow};
   }
 `;
 
@@ -152,7 +151,7 @@ const HistoryItem = styled.li`
   border-radius: ${theme.borderRadius.md};
   margin-bottom: ${theme.spacing.sm};
   cursor: pointer;
-  background-color: ${props => props.isSelected ? 'rgba(122, 201, 192, 0.2)' : 'transparent'};
+  background-color: ${props => props.$isSelected ? 'rgba(0, 0, 0, 0.05)' : 'transparent'};
   border-left: ${props => props.isSelected ? `3px solid ${theme.colors.primary.teal}` : '3px solid transparent'};
   transition: all 0.2s ease;
   
@@ -180,7 +179,7 @@ const HistoryItemTimestamp = styled.div`
 `;
 
 const HistoryItemBadge = styled.span`
-  background-color: ${props => props.badgeColor || theme.colors.primary.yellow};
+  background-color: ${props => props.$badgeColor || theme.colors.primary.yellow};
   color: ${theme.colors.text.primary};
   font-size: ${theme.typography.fontSize.xs};
   padding: 2px 6px;
@@ -192,28 +191,9 @@ const HistoryItemBadge = styled.span`
 
 const MainContent = styled.main`
   flex: 1;
-  padding: 2rem;
-  max-width: ${props => props.sidebarOpen ? 'calc(100% - 280px)' : '1200px'};
-  width: 100%;
-  transition: max-width 0.3s ease, margin-left 0.3s ease;
-  margin-left: ${props => props.sidebarOpen ? '280px' : '0'};
-  
-  /* Center content but maintain sidebar space */
-  @media (min-width: 1480px) {
-    max-width: ${props => props.sidebarOpen ? '1200px' : '1200px'};
-  }
-  
-  /* Ensure we don't get too narrow on mid-size screens */
-  @media (max-width: 1479px) and (min-width: 769px) {
-    max-width: ${props => props.sidebarOpen ? 'calc(100% - 280px)' : 'calc(100% - 2rem)'};
-  }
-  
-  /* Full width on mobile */
-  @media (max-width: 768px) {
-    max-width: 100%;
-    margin-left: 0;
-    padding: 1rem;
-  }
+  padding: ${theme.spacing.lg};
+  margin-left: ${props => props.$sidebarOpen ? '250px' : '0'};
+  transition: margin-left 0.3s ease;
 `;
 
 const Footer = styled.footer`
@@ -224,6 +204,24 @@ const Footer = styled.footer`
   font-family: ${theme.typography.fontFamily.body};
 `;
 
+const Badge = styled.span`
+  background-color: ${props => {
+    switch(props.$badgeColor) {
+      case 'success': return theme.colors.success.main;
+      case 'warning': return theme.colors.warning.main;
+      case 'error': return theme.colors.error.main;
+      default: return theme.colors.primary;
+    }
+  }};
+  color: ${theme.colors.text.primary};
+  font-size: ${theme.typography.fontSize.xs};
+  padding: 2px 6px;
+  border-radius: ${theme.borderRadius.full};
+  font-weight: ${theme.typography.fontWeight.medium};
+  margin-left: auto;
+  opacity: 0.8;
+`;
+
 export const AppLayout = ({ 
   children, 
   historyItems = [], 
@@ -232,7 +230,7 @@ export const AppLayout = ({
   selectedHistoryItem = null,
   debugLayout = false
 }) => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const navigate = useNavigate();
 
   const toggleSidebar = () => {
@@ -290,7 +288,7 @@ export const AppLayout = ({
         </ClickableLogoContainer>
       </Header>
       <MainContainer style={debugLayout ? {border: '1px dashed red'} : {}}>
-        <SidebarWrapper isOpen={sidebarOpen} style={debugLayout ? {border: '1px dashed blue'} : {}}>
+        <Sidebar $isOpen={sidebarOpen} style={debugLayout ? {border: '1px dashed blue'} : {}}>
           <SidebarHeader>Analysis History</SidebarHeader>
           <SidebarContent>
             {historyItems.length === 0 ? (
@@ -301,7 +299,7 @@ export const AppLayout = ({
                   {historyItems.map(item => (
                     <HistoryItem 
                       key={item.id}
-                      isSelected={selectedHistoryItem && selectedHistoryItem.id === item.id}
+                      $isSelected={selectedHistoryItem && selectedHistoryItem.id === item.id}
                       onClick={() => onSelectHistoryItem(item)}
                     >
                       <HistoryItemTitle>
@@ -310,7 +308,7 @@ export const AppLayout = ({
                       <HistoryItemTimestamp>
                         {getRelativeTime(item.timestamp)}
                         {item.type === 'copyRating' ? (
-                          <HistoryItemBadge badgeColor={theme.colors.primary.teal}>
+                          <HistoryItemBadge $badgeColor={theme.colors.primary.teal}>
                             Copy Score: {item.copyScores?.overallScore}/100
                           </HistoryItemBadge>
                         ) : item.results?.subjects?.length > 0 && (
@@ -328,11 +326,11 @@ export const AppLayout = ({
               </>
             )}
           </SidebarContent>
-        </SidebarWrapper>
-        <SidebarToggle isOpen={sidebarOpen} onClick={toggleSidebar}>
+        </Sidebar>
+        <SidebarToggle $isOpen={sidebarOpen} onClick={toggleSidebar}>
           {sidebarOpen ? '←' : '→'}
         </SidebarToggle>
-        <MainContent sidebarOpen={sidebarOpen} style={debugLayout ? {border: '1px dashed green'} : {}}>
+        <MainContent $sidebarOpen={sidebarOpen} style={debugLayout ? {border: '1px dashed green'} : {}}>
           {children}
         </MainContent>
       </MainContainer>

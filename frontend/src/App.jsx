@@ -8,11 +8,11 @@ import { theme } from './styles/theme';
 import { loadingQuotes } from './components/loading/QuotesData';
 import './styles/fonts.css';
 import LandingPage from './pages/LandingPage';
-import { Radar } from 'react-chartjs-2';
-import { Chart as ChartJS, RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend } from 'chart.js';
+import { Chart, RadarController, LineElement, PointElement, RadialLinearScale, Tooltip, Legend } from 'chart.js';
+import LeadGrid from './components/dashboard/LeadGrid';
 
 // Register the required Chart.js components
-ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
+Chart.register(RadarController, LineElement, PointElement, RadialLinearScale, Tooltip, Legend);
 
 // Updated styling to match landing page aesthetic
 const FormContainer = styled.div`
@@ -263,13 +263,13 @@ const OverallScore = styled.div`
   font-size: ${theme.typography.fontSize['2xl']};
   font-weight: ${theme.typography.fontWeight.bold};
   color: ${props => {
-    const score = parseInt(props.score);
+    const score = parseInt(props.$score);
     if (score >= 80) return '#38A169';
     if (score >= 60) return '#D69E2E';
     return '#E53E3E';
   }};
   background-color: ${props => {
-    const score = parseInt(props.score);
+    const score = parseInt(props.$score);
     if (score >= 80) return 'rgba(56, 161, 105, 0.1)';
     if (score >= 60) return 'rgba(214, 158, 46, 0.1)';
     return 'rgba(229, 62, 62, 0.1)';
@@ -277,7 +277,7 @@ const OverallScore = styled.div`
   padding: 0.5rem 1rem;
   border-radius: ${theme.borderRadius.md};
   border: 2px solid ${props => {
-    const score = parseInt(props.score);
+    const score = parseInt(props.$score);
     if (score >= 80) return '#38A169';
     if (score >= 60) return '#D69E2E';
     return '#E53E3E';
@@ -307,13 +307,21 @@ const CategoryName = styled.h4`
 `;
 
 const CategoryScore = styled.div`
+  background-color: ${props => {
+    const percentage = (props.$score / props.$maxScore) * 100;
+    if (percentage >= 70) return '#D5F5E3'; // light green
+    if (percentage >= 40) return '#FCF3CF'; // light yellow
+    return '#FADBD8'; // light red
+  }};
   font-weight: ${theme.typography.fontWeight.semibold};
   color: ${props => {
-    const score = (props.score / props.maxScore) * 100;
+    const score = (props.$score / props.$maxScore) * 100;
     if (score >= 80) return '#38A169';
     if (score >= 60) return '#D69E2E';
     return '#E53E3E';
   }};
+  padding: 0.5rem 1rem;
+  border-radius: ${theme.borderRadius.md};
 `;
 
 const SubcategoriesList = styled.ul`
@@ -341,14 +349,21 @@ const SubcategoryName = styled.span`
 `;
 
 const SubcategoryScore = styled.span`
-  font-size: ${theme.typography.fontSize.sm};
-  font-weight: ${theme.typography.fontWeight.medium};
+  font-weight: ${theme.typography.fontWeight.semibold};
   color: ${props => {
-    const score = (props.score / props.maxScore) * 100;
+    const score = (props.$score / props.$maxScore) * 100;
     if (score >= 80) return '#38A169';
     if (score >= 60) return '#D69E2E';
     return '#E53E3E';
   }};
+  background-color: ${props => {
+    const score = (props.$score / props.$maxScore) * 100;
+    if (score >= 80) return 'rgba(56, 161, 105, 0.1)';
+    if (score >= 60) return 'rgba(214, 158, 46, 0.1)';
+    return 'rgba(229, 62, 62, 0.1)';
+  }};
+  padding: 0.25rem 0.5rem;
+  border-radius: ${theme.borderRadius.md};
 `;
 
 // Add this new styled component near your other styled components
@@ -398,6 +413,125 @@ const getBackendUrl = () => {
   return `http://localhost:${DEFAULT_PORT}`;
 };
 
+// Create an error boundary component
+class ChartErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Chart error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ 
+          padding: '20px', 
+          textAlign: 'center',
+          backgroundColor: theme.colors.background.light,
+          borderRadius: theme.borderRadius.md,
+          color: theme.colors.text.primary
+        }}>
+          <h3>Chart couldn't be displayed</h3>
+          <p>There was a problem rendering the chart component.</p>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// Then update your RadarChart component to simplify it and avoid potential issues
+const RadarChart = React.memo(({ data, categoryName }) => {
+  const chartRef = React.useRef(null);
+  const chartInstance = React.useRef(null);
+  
+  React.useEffect(() => {
+    // Only create chart if canvas element exists and data is valid
+    if (!chartRef.current || !data || !data.labels || !data.datasets) {
+      return;
+    }
+    
+    // Get canvas context
+    const ctx = chartRef.current.getContext('2d');
+    
+    // Cleanup previous chart instance if it exists
+    if (chartInstance.current) {
+      chartInstance.current.destroy();
+    }
+    
+    // Create new chart instance
+    chartInstance.current = new Chart(ctx, {
+      type: 'radar',
+      data: data,
+      options: {
+        responsive: true, 
+        maintainAspectRatio: false,
+        scales: {
+          r: {
+            beginAtZero: true,
+            min: 0,
+            max: 10,
+            ticks: {
+              display: false,
+              stepSize: 2
+            },
+            angleLines: {
+              display: true,
+              color: 'rgba(0, 0, 0, 0.1)'
+            },
+            grid: {
+              color: 'rgba(0, 0, 0, 0.1)'
+            },
+            pointLabels: {
+              font: {
+                size: 12,
+                family: "'Courier', monospace"
+              }
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            titleFont: {
+              family: "'Courier', monospace"
+            },
+            callbacks: {
+              title: (items) => data.labels[items[0].dataIndex],
+              label: (item) => `Score: ${item.raw}/10`
+            }
+          }
+        }
+      }
+    });
+    
+    // Cleanup function
+    return () => {
+      if (chartInstance.current) {
+        chartInstance.current.destroy();
+        chartInstance.current = null;
+      }
+    };
+  }, [data]);
+  
+  return (
+    <div style={{ width: '100%', height: '300px', position: 'relative' }}>
+      <canvas ref={chartRef} />
+    </div>
+  );
+});
+
 function App() {
   const [article, setArticle] = useState('');
   const [loading, setLoading] = useState(false);
@@ -409,6 +543,11 @@ function App() {
   const [currentQuote, setCurrentQuote] = useState('');
   const [historyItems, setHistoryItems] = useState([]);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
+  const [leads, setLeads] = useState([]);
+  const [leadsLoading, setLeadsLoading] = useState(false);
+  const [leadsError, setLeadsError] = useState('');
+  const [showLeads, setShowLeads] = useState(false);
+  const [activeTab, setActiveTab] = useState('analysis'); // 'analysis' or 'rating'
   
   // Initialize the backend URL
   const [backendUrl, setBackendUrl] = useState(getBackendUrl());
@@ -549,6 +688,8 @@ function App() {
       setError(`Failed to analyze article: ${err.message}`);
     } finally {
       setLoading(false);
+      setActiveTab('analysis');
+      setShowLeads(false);
     }
   };
   
@@ -648,6 +789,8 @@ function App() {
       setScoringError(`Failed to rate copy: ${err.message}`);
     } finally {
       setScoringLoading(false);
+      setActiveTab('rating');
+      setShowLeads(false);
     }
   };
   
@@ -693,6 +836,47 @@ function App() {
     );
   };
 
+  // Update the handleSearchLeads function to use the more robust endpoint
+  const handleSearchLeads = async () => {
+    if (!results || !results.subjects || results.subjects.length === 0) {
+      setLeadsError('No subjects available to search for leads');
+      return;
+    }
+    
+    setLeadsError('');
+    setLeadsLoading(true);
+    setLeads([]);
+    setShowLeads(true);
+    
+    try {
+      console.log('Sending lead search request to backend...');
+      const response = await fetch(`${backendUrl}/api/v1/search-leads`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ subjects: results.subjects }),
+        signal: AbortSignal.timeout(60000),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Lead search response error:', response.status, errorText);
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Lead search response received:', data);
+      setLeads(data.leads || []);
+      
+    } catch (err) {
+      console.error('Lead search error:', err);
+      setLeadsError(`Failed to search for leads: ${err.message}`);
+    } finally {
+      setLeadsLoading(false);
+    }
+  };
+
   return (
     <Router>
       <Routes>
@@ -711,6 +895,7 @@ function App() {
             >
               {error && <ErrorMessage>{error}</ErrorMessage>}
               {scoringError && <ErrorMessage>{scoringError}</ErrorMessage>}
+              {leadsError && <ErrorMessage>{leadsError}</ErrorMessage>}
               
               <FormContainer>
                 <FormTitle>SEO Backlink Builder</FormTitle>
@@ -722,21 +907,27 @@ function App() {
                 <ButtonGroup>
                   <StyledButton 
                     primary 
-                    onClick={handleAnalyze} 
-                    disabled={!article.trim() || loading || scoringLoading}
+                    onClick={() => {
+                      handleAnalyze();
+                      setActiveTab('analysis');
+                    }} 
+                    disabled={!article.trim() || loading || scoringLoading || leadsLoading}
                   >
                     {loading ? 'Analyzing...' : 'Analyze Article'}
                   </StyledButton>
                   <StyledButton 
-                    onClick={handleRateCopy} 
-                    disabled={!article.trim() || loading || scoringLoading}
+                    onClick={() => {
+                      handleRateCopy();
+                      setActiveTab('rating');
+                    }} 
+                    disabled={!article.trim() || loading || scoringLoading || leadsLoading}
                   >
                     {scoringLoading ? 'Rating...' : 'Rate My Copy'}
                   </StyledButton>
                 </ButtonGroup>
               </FormContainer>
               
-              {results && (
+              {results && activeTab === 'analysis' && (
                 <ResultsContainer>
                   <Card>
                     <CardTitle>Identified Themes</CardTitle>
@@ -745,6 +936,14 @@ function App() {
                         <ListItem key={index}>{subject}</ListItem>
                       ))}
                     </List>
+                    <ButtonContainer>
+                      <StyledButton 
+                        onClick={handleSearchLeads}
+                        disabled={leadsLoading}
+                      >
+                        {leadsLoading ? 'Searching...' : 'Show Me Leads'}
+                      </StyledButton>
+                    </ButtonContainer>
                   </Card>
                   
                   <Card>
@@ -766,11 +965,22 @@ function App() {
                 </ResultsContainer>
               )}
               
-              {copyScores && (
+              {showLeads && activeTab === 'analysis' && (
+                <LeadResultsContainer>
+                  <LeadSectionTitle>Potential Leads</LeadSectionTitle>
+                  {leadsLoading ? (
+                    <LoadingMessage>Searching for relevant leads...</LoadingMessage>
+                  ) : (
+                    <LeadGrid leads={leads} />
+                  )}
+                </LeadResultsContainer>
+              )}
+              
+              {copyScores && activeTab === 'rating' && (
                 <ScoreDashboard>
                   <ScoreHeader>
                     <ScoreTitle>Copy Quality Assessment</ScoreTitle>
-                    <OverallScore score={copyScores.overallScore}>
+                    <OverallScore $score={copyScores.overallScore}>
                       {copyScores.overallScore}/100
                     </OverallScore>
                   </ScoreHeader>
@@ -794,7 +1004,7 @@ function App() {
                     <CategoryScoreCard key={index}>
                       <CategoryHeader>
                         <CategoryName>{category.name}</CategoryName>
-                        <CategoryScore score={category.score} maxScore={category.maxScore}>
+                        <CategoryScore $score={category.score} $maxScore={category.maxScore}>
                           {category.score}/{category.maxScore}
                         </CategoryScore>
                       </CategoryHeader>
@@ -805,7 +1015,7 @@ function App() {
                             {category.subcategories.map((sub, subIndex) => (
                               <SubcategoryItem key={subIndex}>
                                 <SubcategoryName>{sub.name}</SubcategoryName>
-                                <SubcategoryScore score={sub.score} maxScore={sub.maxScore}>
+                                <SubcategoryScore $score={sub.score} $maxScore={sub.maxScore}>
                                   {sub.score}/{sub.maxScore}
                                 </SubcategoryScore>
                               </SubcategoryItem>
@@ -816,78 +1026,35 @@ function App() {
                         </ScoreDetails>
                         
                         <ChartContainer>
-                          <Radar
-                            data={{
-                              labels: category.subcategories.map(sub => sub.name),
-                              datasets: [
-                                {
-                                  label: category.name,
-                                  data: category.subcategories.map(sub => sub.score),
-                                  backgroundColor: `rgba(${category.name === 'Content Quality' 
-                                    ? '56, 161, 105, 0.2' 
-                                    : '214, 158, 46, 0.2'})`,
-                                  borderColor: `${category.name === 'Content Quality' 
-                                    ? '#38A169' 
-                                    : '#D69E2E'}`,
-                                  borderWidth: 2,
-                                  pointBackgroundColor: `${category.name === 'Content Quality' 
-                                    ? '#38A169' 
-                                    : '#D69E2E'}`,
-                                  pointBorderColor: '#fff',
-                                  pointHoverBackgroundColor: '#fff',
-                                  pointHoverBorderColor: `${category.name === 'Content Quality' 
-                                    ? '#38A169' 
-                                    : '#D69E2E'}`,
-                                }
-                              ]
-                            }}
-                            options={{
-                              scales: {
-                                r: {
-                                  angleLines: {
-                                    display: true,
-                                    color: 'rgba(0, 0, 0, 0.1)'
-                                  },
-                                  suggestedMin: 0,
-                                  suggestedMax: 10,
-                                  ticks: {
-                                    stepSize: 2,
-                                    backdropColor: 'transparent'
+                          <ChartErrorBoundary>
+                            <RadarChart 
+                              data={{
+                                labels: category.subcategories.map(sub => sub.name),
+                                datasets: [
+                                  {
+                                    label: category.name,
+                                    data: category.subcategories.map(sub => sub.score),
+                                    backgroundColor: `rgba(${category.name === 'Content Quality' 
+                                      ? '56, 161, 105, 0.2' 
+                                      : '214, 158, 46, 0.2'})`,
+                                    borderColor: `${category.name === 'Content Quality' 
+                                      ? '#38A169' 
+                                      : '#D69E2E'}`,
+                                    borderWidth: 2,
+                                    pointBackgroundColor: `${category.name === 'Content Quality' 
+                                      ? '#38A169' 
+                                      : '#D69E2E'}`,
+                                    pointBorderColor: '#fff',
+                                    pointHoverBackgroundColor: '#fff',
+                                    pointHoverBorderColor: `${category.name === 'Content Quality' 
+                                      ? '#38A169' 
+                                      : '#D69E2E'}`,
                                   }
-                                }
-                              },
-                              elements: {
-                                line: {
-                                  tension: 0.2
-                                }
-                              },
-                              plugins: {
-                                legend: {
-                                  display: false
-                                },
-                                tooltip: {
-                                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                                  titleFont: {
-                                    size: 14,
-                                    family: 'Courier, monospace'
-                                  },
-                                  bodyFont: {
-                                    size: 12
-                                  },
-                                  callbacks: {
-                                    title: (items) => {
-                                      return category.subcategories[items[0].dataIndex].name;
-                                    },
-                                    label: (item) => {
-                                      return `Score: ${item.raw}/10`;
-                                    }
-                                  }
-                                }
-                              },
-                              responsive: true,
-                              maintainAspectRatio: false
-                            }}
-                          />
+                                ]
+                              }}
+                              categoryName={`category-${index}`}
+                            />
+                          </ChartErrorBoundary>
                         </ChartContainer>
                       </ScoreCardLayout>
                     </CategoryScoreCard>
@@ -930,5 +1097,45 @@ function App() {
     </Router>
   );
 }
+
+// Add styled components for the leads section
+const ButtonContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  margin-top: ${props => props.theme?.spacing?.md || '1rem'};
+`;
+
+const LeadResultsContainer = styled.div`
+  margin-top: 2rem;
+  background-color: white;
+  border: 2px solid black;
+  border-radius: ${theme.borderRadius.lg};
+  padding: ${theme.spacing.xl};
+  box-shadow: ${theme.shadows.md};
+  width: 100%;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  
+  &:hover {
+    box-shadow: ${theme.shadows.lg};
+  }
+`;
+
+const LeadSectionTitle = styled.h2`
+  font-family: 'Courier', monospace;
+  font-weight: ${theme.typography.fontWeight.bold};
+  font-size: ${theme.typography.fontSize['2xl']};
+  color: ${theme.colors.text.primary};
+  margin-bottom: ${theme.spacing.lg};
+  text-align: center;
+  border-bottom: 2px solid ${theme.colors.primary.teal};
+  padding-bottom: ${theme.spacing.sm};
+`;
+
+const LoadingMessage = styled.div`
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+  font-style: italic;
+`;
 
 export default App; 

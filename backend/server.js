@@ -4,10 +4,117 @@ const cors = require('cors');
 const axios = require('axios');
 const { Builder, By, until } = require('selenium-webdriver');
 const chrome = require('selenium-webdriver/chrome');
+const mysql = require('mysql2/promise');
 const app = express();
 
 // Add near the top of the file, after imports
 const API_KEY = process.env.HYPERBOLIC_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJtZXphaW5tem5AZ21haWwuY29tIiwiaWF0IjoxNzM1NDAwMTA1fQ.gWCenzKcIrmd_3lvSpCPokbP6siW8DnnPH0BVfPAwCo';
+
+// MySQL Database Configuration
+const dbConfig = {
+  host: process.env.DB_HOST || '127.0.0.1',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || 'password',
+  database: process.env.DB_NAME || 'leads_db',
+  port: process.env.DB_PORT || 3306,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+};
+
+// Create MySQL connection pool
+let pool;
+async function initializeDatabase() {
+  try {
+    pool = mysql.createPool(dbConfig);
+    console.log('MySQL connection pool initialized');
+    
+    // Test connection and set up database schema if needed
+    const connection = await pool.getConnection();
+    console.log('MySQL database connected!');
+    
+    // Create leads table if it doesn't exist
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS leads (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        first_name VARCHAR(255),
+        last_name VARCHAR(255),
+        email VARCHAR(255),
+        phone VARCHAR(100),
+        company_name VARCHAR(255),
+        position VARCHAR(255),
+        address TEXT,
+        city VARCHAR(100),
+        state VARCHAR(100),
+        zip VARCHAR(50),
+        country VARCHAR(100),
+        website VARCHAR(255),
+        industry VARCHAR(255),
+        company_size VARCHAR(100),
+        employee_count VARCHAR(100),
+        revenue VARCHAR(100),
+        linkedin_url VARCHAR(255),
+        twitter_url VARCHAR(255),
+        facebook_url VARCHAR(255),
+        source VARCHAR(255),
+        status VARCHAR(100),
+        rating VARCHAR(50),
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('Leads table created or already exists');
+    
+    // Check if the table is empty and insert sample data if necessary
+    const [rows] = await connection.query('SELECT COUNT(*) as count FROM leads');
+    if (rows[0].count === 0) {
+      console.log('No leads found. Inserting sample data...');
+      // Insert sample data
+      await connection.query(`
+        INSERT INTO leads 
+          (first_name, last_name, email, phone, company_name, position, industry, notes)
+        VALUES 
+          ('John', 'Smith', 'john@techcorp.com', '555-123-4567', 'Tech Corp', 'CTO', 'Technology', 'Met at tech conference'),
+          ('Emily', 'Johnson', 'emily@marketwise.com', '555-987-6543', 'MarketWise', 'Marketing Director', 'Marketing', 'Interested in SEO services'),
+          ('Michael', 'Brown', 'michael@healthplus.com', '555-456-7890', 'Health Plus', 'CEO', 'Healthcare', 'Looking for content marketing'),
+          ('Sarah', 'Williams', 'sarah@financegroup.com', '555-789-0123', 'Finance Group', 'CFO', 'Finance', 'Needs website optimization'),
+          ('David', 'Miller', 'david@retailpro.com', '555-234-5678', 'Retail Pro', 'Digital Manager', 'Retail', 'Interested in backlink strategies'),
+          ('Jennifer', 'Davis', 'jennifer@eduworld.org', '555-876-5432', 'EduWorld', 'Content Director', 'Education', 'Wants to improve blog SEO'),
+          ('Robert', 'Wilson', 'robert@fooddelight.com', '555-345-6789', 'Food Delight', 'Marketing Manager', 'Food & Beverage', 'Looking for restaurant SEO'),
+          ('Lisa', 'Taylor', 'lisa@travelmore.com', '555-654-3210', 'Travel More', 'Digital Strategist', 'Travel', 'Needs better search visibility'),
+          ('James', 'Anderson', 'james@constructbig.com', '555-432-1098', 'Construct Big', 'Owner', 'Construction', 'Local SEO for construction business'),
+          ('Karen', 'Thomas', 'karen@techstartup.io', '555-321-0987', 'Tech Startup', 'Founder', 'Technology', 'New startup needs SEO guidance')
+      `);
+      console.log('Sample leads data inserted');
+    }
+    
+    connection.release();
+  } catch (error) {
+    console.error('Error connecting to MySQL database or initializing schema:', error);
+    
+    // Check for specific connection errors and provide more helpful messages
+    if (error.code === 'ECONNREFUSED') {
+      console.error('\x1b[31m%s\x1b[0m', '---------------------------------------------------');
+      console.error('\x1b[31m%s\x1b[0m', '| ERROR: MySQL server is not running!            |');
+      console.error('\x1b[31m%s\x1b[0m', '| Please start your MySQL server before          |');
+      console.error('\x1b[31m%s\x1b[0m', '| continuing.                                    |');
+      console.error('\x1b[31m%s\x1b[0m', '---------------------------------------------------');
+    } else if (error.code === 'ER_ACCESS_DENIED_ERROR') {
+      console.error('\x1b[31m%s\x1b[0m', '---------------------------------------------------');
+      console.error('\x1b[31m%s\x1b[0m', '| ERROR: Invalid MySQL credentials!              |');
+      console.error('\x1b[31m%s\x1b[0m', '| Please check your username and password.       |');
+      console.error('\x1b[31m%s\x1b[0m', '---------------------------------------------------');
+    } else if (error.code === 'ER_BAD_DB_ERROR') {
+      console.error('\x1b[31m%s\x1b[0m', '---------------------------------------------------');
+      console.error('\x1b[31m%s\x1b[0m', '| ERROR: Database "leads_db" does not exist!     |');
+      console.error('\x1b[31m%s\x1b[0m', '| Please create it before continuing.            |');
+      console.error('\x1b[31m%s\x1b[0m', '---------------------------------------------------');
+    }
+  }
+}
+
+// Initialize database connection
+initializeDatabase();
 
 // Add this near the top of the file
 const CACHE = {};
@@ -924,6 +1031,142 @@ ${article}`;
   }
 });
 
+// POST endpoint for searching leads based on subjects
+app.post('/api/v1/search-leads', async (req, res) => {
+  console.log(`[${new Date().toISOString()}] Request received at /api/v1/search-leads`);
+  console.log(`[${new Date().toISOString()}] Request body:`, req.body);
+  
+  try {
+    const { subjects } = req.body;
+    
+    if (!subjects || !Array.isArray(subjects) || subjects.length === 0) {
+      console.log(`[${new Date().toISOString()}] Invalid subjects:`, subjects);
+      return res.status(400).json({ error: 'No subjects provided or invalid format' });
+    }
+    
+    console.log(`[${new Date().toISOString()}] Searching leads for subjects:`, subjects);
+    
+    // Extract relevant keywords from the subject strings
+    const keywords = subjects.flatMap(subject => {
+      // Remove the "- Category:" prefix and extract just the content
+      const content = subject.replace(/^-\s*[^:]+:\s*/, '');
+      // Split into words and filter out common words
+      return content.split(/\s+/)
+        .filter(word => word.length > 3) // Only words longer than 3 chars
+        .map(word => word.replace(/[.,;:'"!?()]/g, '')) // Remove punctuation
+        .filter(Boolean); // Remove empty strings
+    });
+    
+    // Remove duplicates and limit to the most relevant keywords
+    const uniqueKeywords = [...new Set(keywords)].slice(0, 10);
+    
+    console.log(`[${new Date().toISOString()}] Extracted keywords:`, uniqueKeywords);
+    
+    if (uniqueKeywords.length === 0) {
+      return res.json({ leads: [] });
+    }
+    
+    let connection;
+    try {
+      connection = await pool.getConnection();
+      
+      // Simpler query that looks for keyword matches
+      const searchClauses = uniqueKeywords.map(() => 
+        `industry LIKE ? OR company_name LIKE ? OR position LIKE ? OR notes LIKE ?`
+      );
+      
+      const whereClause = searchClauses.join(' OR ');
+      
+      // Create parameter array with each keyword repeated 4 times (for the 4 search columns)
+      const params = uniqueKeywords.flatMap(keyword => {
+        const searchTerm = `%${keyword}%`;
+        return [searchTerm, searchTerm, searchTerm, searchTerm];
+      });
+      
+      const query = `
+        SELECT id, first_name, last_name, email, phone, company_name, position, industry 
+        FROM leads 
+        WHERE ${whereClause}
+        LIMIT 20
+      `;
+      
+      console.log(`[${new Date().toISOString()}] Executing query:`, query.replace(/\s+/g, ' '));
+      console.log(`[${new Date().toISOString()}] With parameters:`, params);
+      
+      const [results] = await connection.query(query, params);
+      
+      console.log(`[${new Date().toISOString()}] Found ${results.length} leads`);
+      
+      // Return results
+      return res.json({ leads: results });
+    } catch (error) {
+      console.error(`[${new Date().toISOString()}] Database error:`, error);
+      return res.status(500).json({ error: 'Database error', details: error.message });
+    } finally {
+      if (connection) connection.release();
+    }
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error:`, error);
+    return res.status(500).json({ error: 'Server error', details: error.message });
+  }
+});
+
+// Replace the simple search-leads endpoint with a real database implementation
+app.post('/api/v1/search-leads-simple', async (req, res) => {
+  console.log(`[${new Date().toISOString()}] Request received at /api/v1/search-leads-simple`);
+  console.log(`[${new Date().toISOString()}] Request body:`, req.body);
+  
+  try {
+    const { subjects } = req.body;
+    
+    if (!subjects || !Array.isArray(subjects) || subjects.length === 0) {
+      console.log(`[${new Date().toISOString()}] Invalid subjects:`, subjects);
+      return res.status(400).json({ error: 'No subjects provided or invalid format' });
+    }
+    
+    console.log(`[${new Date().toISOString()}] Searching leads for subjects:`, subjects);
+    
+    // Create WHERE clauses for each subject to search across relevant columns
+    const searchClauses = subjects.map(subject => {
+      const searchTerm = `%${subject}%`;
+      return `(
+        industry LIKE ? OR
+        company_name LIKE ? OR
+        position LIKE ? OR
+        notes LIKE ?
+      )`;
+    });
+    
+    // Combine WHERE clauses with OR
+    const whereClause = searchClauses.join(' OR ');
+    
+    // Create parameter array with each subject repeated 4 times (for the 4 search columns)
+    const params = subjects.flatMap(subject => {
+      const searchTerm = `%${subject}%`;
+      return [searchTerm, searchTerm, searchTerm, searchTerm];
+    });
+    
+    // Query the database
+    const query = `
+      SELECT id, first_name, last_name, email, phone, company_name, position, industry 
+      FROM leads 
+      WHERE ${whereClause}
+      LIMIT 20
+    `;
+    
+    console.log(`[${new Date().toISOString()}] Executing query:`, query.replace(/\s+/g, ' '));
+    console.log(`[${new Date().toISOString()}] With parameters:`, params);
+    
+    const [rows] = await pool.query(query, params);
+    console.log(`[${new Date().toISOString()}] Found ${rows.length} leads`);
+    
+    return res.json({ leads: rows });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error searching leads:`, error);
+    return res.status(500).json({ error: 'Server error', details: error.message });
+  }
+});
+
 // Add near the end, before starting the server
 app.use((err, req, res, next) => {
   console.error(`[${new Date().toISOString()}] Unhandled error:`, err);
@@ -933,8 +1176,8 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start the backend server on port 5002 (change as needed)
-const PORT = process.env.PORT || 5002;
+// Start the backend server on port 5005 (change as needed)
+const PORT = process.env.PORT || 5005;
 const server = app.listen(PORT, () => {
   console.log(`[${new Date().toISOString()}] Server running on port ${PORT}`);
 });
