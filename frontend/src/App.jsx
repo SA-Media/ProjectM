@@ -10,6 +10,8 @@ import './styles/fonts.css';
 import LandingPage from './pages/LandingPage';
 import { Chart, RadarController, LineElement, PointElement, RadialLinearScale, Tooltip, Legend } from 'chart.js';
 import LeadGrid from './components/dashboard/LeadGrid';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 // Register the required Chart.js components
 Chart.register(RadarController, LineElement, PointElement, RadialLinearScale, Tooltip, Legend);
@@ -65,8 +67,8 @@ const ButtonGroup = styled.div`
 
 // Updated button styling
 const StyledButton = styled(Button)`
-  background-color: ${props => props.primary ? theme.colors.primary.teal : 'white'};
-  color: ${props => props.primary ? 'white' : theme.colors.text.primary};
+  background-color: ${props => props.$primary ? theme.colors.primary.teal : 'white'};
+  color: ${props => props.$primary ? 'white' : theme.colors.text.primary};
   border: 2px solid black;
   border-radius: ${theme.borderRadius.md};
   font-weight: ${theme.typography.fontWeight.semibold};
@@ -140,12 +142,15 @@ const ListItem = styled.li`
 `;
 
 const ErrorMessage = styled.div`
-  background-color: #FFF5F5;
-  color: #E53E3E;
-  padding: ${theme.spacing.md};
-  border-radius: ${theme.borderRadius.md};
-  margin-bottom: ${theme.spacing.md};
-  border: 2px solid #E53E3E;
+  font-family: ${props => props.theme?.typography?.fontFamily?.body || 'system-ui, sans-serif'};
+  font-size: ${props => props.theme?.typography?.fontSize?.lg || '1.125rem'};
+  margin-bottom: ${props => props.theme?.spacing?.xl || '2rem'};
+  padding: ${props => props.theme?.spacing?.lg || '1.5rem'};
+  background-color: ${props => props.theme?.colors?.background?.light || '#F7FAFC'};
+  border: 1px solid ${props => props.theme?.colors?.border?.light || '#E2E8F0'};
+  border-radius: ${props => props.theme?.borderRadius?.md || '0.375rem'};
+  max-width: 800px;
+  width: 100%;
 `;
 
 // Updated loading overlay styling
@@ -413,6 +418,137 @@ const getBackendUrl = () => {
   return `http://localhost:${DEFAULT_PORT}`;
 };
 
+// Utility function for API calls with improved error handling
+const apiCall = async (url, method = 'GET', data = null, timeoutMs = 30000) => {
+  console.log(`Making ${method} request to ${url}`, data);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const options = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: controller.signal,
+      ...(data && { body: JSON.stringify(data) }),
+    };
+
+    const response = await fetch(url, options);
+    clearTimeout(timeoutId);
+
+    console.log(`Response status: ${response.status}`);
+    
+    // Handle non-2xx responses
+    if (!response.ok) {
+      let errorMessage = `Request failed with status ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch (jsonError) {
+        // If response is not JSON, try to get text
+        try {
+          errorMessage = await response.text() || errorMessage;
+        } catch (textError) {
+          console.error('Could not parse error response as text:', textError);
+        }
+      }
+      
+      throw new Error(errorMessage);
+    }
+
+    const responseData = await response.json();
+    console.log('Response data:', responseData);
+    return responseData;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    
+    // Handle different error types
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeoutMs/1000} seconds`);
+    }
+    
+    console.error('API call error:', error);
+    throw error;
+  }
+};
+
+// Global error boundary for the entire app
+class GlobalErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Application error:', error, errorInfo);
+    this.setState({ errorInfo });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <ErrorContainer>
+          <ErrorTitle>Something went wrong</ErrorTitle>
+          <ErrorMessage>
+            {this.state.error && this.state.error.toString()}
+          </ErrorMessage>
+          <Button 
+            onClick={() => {
+              this.setState({ hasError: false, error: null, errorInfo: null });
+              window.location.reload();
+            }}
+          >
+            Try again
+          </Button>
+          {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+            <ErrorStack>
+              {this.state.errorInfo.componentStack}
+            </ErrorStack>
+          )}
+        </ErrorContainer>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+const ErrorContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  padding: ${props => props.theme?.spacing?.xl || '2rem'};
+  background-color: ${props => props.theme?.colors?.background?.light || '#F7FAFC'};
+`;
+
+const ErrorTitle = styled.h1`
+  font-family: 'Courier', monospace;
+  font-size: ${props => props.theme?.typography?.fontSize?.['4xl'] || '2.25rem'};
+  margin-bottom: ${props => props.theme?.spacing?.lg || '1.5rem'};
+  color: ${props => props.theme?.colors?.error || '#E53E3E'};
+`;
+
+const ErrorStack = styled.pre`
+  font-family: monospace;
+  font-size: ${props => props.theme?.typography?.fontSize?.sm || '0.875rem'};
+  margin-top: ${props => props.theme?.spacing?.xl || '2rem'};
+  padding: ${props => props.theme?.spacing?.lg || '1.5rem'};
+  background-color: #f8f8f8;
+  border: 1px solid ${props => props.theme?.colors?.border?.light || '#e2e8f0'};
+  border-radius: ${props => props.theme?.borderRadius?.md || '0.375rem'};
+  max-width: 800px;
+  width: 100%;
+  overflow-x: auto;
+  color: #666;
+`;
+
 // Create an error boundary component
 class ChartErrorBoundary extends React.Component {
   constructor(props) {
@@ -532,9 +668,16 @@ const RadarChart = React.memo(({ data, categoryName }) => {
   );
 });
 
+// Define a wrapper component for StyledButton that handles the $primary prop
+const PrimaryButton = ({ $primary, ...props }) => {
+  return <StyledButton $primary={$primary} variant={$primary ? 'primary' : 'outline'} {...props} />;
+};
+
 function App() {
+  // State variables for the main application
   const [article, setArticle] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [scoringLoading, setScoringLoading] = useState(false);
   const [results, setResults] = useState(null);
   const [copyScores, setCopyScores] = useState(null);
@@ -548,6 +691,12 @@ function App() {
   const [leadsError, setLeadsError] = useState('');
   const [showLeads, setShowLeads] = useState(false);
   const [activeTab, setActiveTab] = useState('analysis'); // 'analysis' or 'rating'
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [loadingMessage, setLoadingMessage] = useState('');
+  const [analysisResults, setAnalysisResults] = useState(null);
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('');
+  const [isConnectionSuccessful, setIsConnectionSuccessful] = useState(false);
   
   // Initialize the backend URL
   const [backendUrl, setBackendUrl] = useState(getBackendUrl());
@@ -592,50 +741,48 @@ function App() {
     }
   }, [loading, scoringLoading]);
 
-  // Enhanced connection test that tries multiple ports if needed
   const testBackendConnection = async () => {
-    // Try with current backend URL first
+    // Ensure the state variable is defined before using it
+    if (typeof setIsTestingConnection === 'function') {
+      setIsTestingConnection(true);
+    }
+    
     try {
-      console.log(`Testing backend connection at ${backendUrl}...`);
-      const response = await fetch(`${backendUrl}/api/v1/analyze`, { 
-        method: 'OPTIONS',
-        mode: 'cors'
-      });
+      const response = await fetch(`${backendUrl}/api/v1/health`);
       
-      if (response.ok) {
-        console.log('Backend connection successful!');
-        return true;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({
+          error: 'Unknown error occurred'
+        }));
+        throw new Error(errorData.error || `Server responded with status ${response.status}`);
       }
-    } catch (err) {
-      console.error(`Connection failed to ${backendUrl}:`, err);
-    }
-    
-    // If current URL failed, try common alternative ports
-    const commonPorts = [5002, 5004, 5005, 5000, 3001];
-    
-    for (const port of commonPorts) {
-      try {
-        const testUrl = `http://localhost:${port}`;
-        console.log(`Trying alternative port: ${testUrl}`);
-        
-        const response = await fetch(`${testUrl}/api/v1/analyze`, { 
-          method: 'OPTIONS',
-          mode: 'cors'
-        });
-        
-        if (response.ok) {
-          console.log(`Found working backend at port ${port}`);
-          // Update the backend URL for future requests
-          updateBackendPort(port);
-          return true;
-        }
-      } catch (err) {
-        console.error(`Port ${port} also failed:`, err);
+      
+      const data = await response.json();
+      if (typeof setConnectionStatus === 'function') {
+        setConnectionStatus('Connected successfully!');
+      }
+      if (typeof setIsConnectionSuccessful === 'function') {
+        setIsConnectionSuccessful(true);
+      }
+      console.log('Connection successful:', data);
+      toast.success('Connected to backend successfully!');
+    } catch (error) {
+      console.error('Connection error:', error);
+      if (typeof setConnectionStatus === 'function') {
+        setConnectionStatus(`Connection failed: ${error.message}`);
+      }
+      if (typeof setIsConnectionSuccessful === 'function') {
+        setIsConnectionSuccessful(false);
+      }
+      if (typeof setErrorMessage === 'function') {
+        setErrorMessage(error.message);
+      }
+      toast.error(`Failed to connect to backend: ${error.message}`);
+    } finally {
+      if (typeof setIsTestingConnection === 'function') {
+        setIsTestingConnection(false);
       }
     }
-    
-    console.error('All connection attempts failed');
-    return false;
   };
 
   useEffect(() => {
@@ -643,53 +790,49 @@ function App() {
   }, []);
 
   const handleAnalyze = async () => {
-    if (!article.trim()) return;
+    if (isLoading) return;
     
-    setError('');
+    if (!article.trim()) {
+      toast.warning('Please enter some text to analyze.');
+      return;
+    }
+
+    setIsLoading(true);
     setLoading(true);
+    setLoadingMessage(loadingQuotes[Math.floor(Math.random() * loadingQuotes.length)]);
+    setAnalysisResults(null);
     setResults(null);
-    setCopyScores(null);
-    
+    setErrorMessage(null);
+
     try {
-      console.log('Sending analysis request to backend...');
-      const response = await fetch(`${backendUrl}/api/v1/analyze`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ article }),
-        signal: AbortSignal.timeout(120000),
-      });
+      const result = await apiCall(`${backendUrl}/api/v1/analyze`, 'POST', { article: article });
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Server response error:', response.status, errorText);
-        throw new Error(`Server error: ${response.status} ${response.statusText}`);
-      }
+      console.log('Analysis results:', result);
+      setAnalysisResults(result);
+      setResults(result);
       
-      const data = await response.json();
-      console.log('Analysis response received:', data);
-      setResults(data);
-      
-      // Add to history
-      const timestamp = new Date();
+      // Save to history
       const newHistoryItem = {
         id: Date.now(),
-        title: `Analysis ${new Date().toLocaleTimeString()}`,
-        timestamp,
-        article,
-        results: data,
+        text: article.substring(0, 100) + (article.length > 100 ? '...' : ''),
+        fullText: article,
+        results: result,
+        timestamp: new Date().toISOString()
       };
       
       setHistoryItems(prev => [newHistoryItem, ...prev]);
+      // Also save to localStorage
+      const updatedHistory = [newHistoryItem, ...historyItems];
+      localStorage.setItem('analysisHistory', JSON.stringify(updatedHistory.slice(0, 10)));
       
-    } catch (err) {
-      console.error('Analysis error:', err);
-      setError(`Failed to analyze article: ${err.message}`);
+      toast.success('Analysis completed successfully!');
+    } catch (error) {
+      console.error('Analysis error:', error);
+      setErrorMessage(error.message);
+      toast.error(`Analysis failed: ${error.message}`);
     } finally {
+      setIsLoading(false);
       setLoading(false);
-      setActiveTab('analysis');
-      setShowLeads(false);
     }
   };
   
@@ -877,224 +1020,245 @@ function App() {
     }
   };
 
+  // Add this useEffect near the other useEffect hooks to debug the results
+  useEffect(() => {
+    console.log('Results state updated:', results);
+  }, [results]);
+
+  useEffect(() => {
+    console.log('AnalysisResults state updated:', analysisResults);
+  }, [analysisResults]);
+
   return (
-    <Router>
-      <Routes>
-        {/* Landing Page Route */}
-        <Route path="/" element={<LandingPage />} />
-        
-        {/* Main App Route */}
-        <Route 
-          path="/app" 
-          element={
-            <AppLayout 
-              historyItems={historyItems}
-              onSelectHistoryItem={handleSelectHistoryItem}
-              onClearHistory={handleClearHistory}
-              selectedHistoryItem={selectedHistoryItem}
-            >
-              {error && <ErrorMessage>{error}</ErrorMessage>}
-              {scoringError && <ErrorMessage>{scoringError}</ErrorMessage>}
-              {leadsError && <ErrorMessage>{leadsError}</ErrorMessage>}
-              
-              <FormContainer>
-                <FormTitle>SEO Backlink Builder</FormTitle>
-                <TextArea 
-                  value={article}
-                  onChange={(e) => setArticle(e.target.value)}
-                  placeholder="Paste your SEO article here..."
-                />
-                <ButtonGroup>
-                  <StyledButton 
-                    primary 
-                    onClick={() => {
-                      handleAnalyze();
-                      setActiveTab('analysis');
-                    }} 
-                    disabled={!article.trim() || loading || scoringLoading || leadsLoading}
-                  >
-                    {loading ? 'Analyzing...' : 'Analyze Article'}
-                  </StyledButton>
-                  <StyledButton 
-                    onClick={() => {
-                      handleRateCopy();
-                      setActiveTab('rating');
-                    }} 
-                    disabled={!article.trim() || loading || scoringLoading || leadsLoading}
-                  >
-                    {scoringLoading ? 'Rating...' : 'Rate My Copy'}
-                  </StyledButton>
-                </ButtonGroup>
-              </FormContainer>
-              
-              {results && activeTab === 'analysis' && (
-                <ResultsContainer>
-                  <Card>
-                    <CardTitle>Identified Themes</CardTitle>
-                    <List>
-                      {results.subjects && results.subjects.map((subject, index) => (
-                        <ListItem key={index}>{subject}</ListItem>
-                      ))}
-                    </List>
-                    <ButtonContainer>
-                      <StyledButton 
-                        onClick={handleSearchLeads}
-                        disabled={leadsLoading}
+    <>
+      <GlobalErrorBoundary>
+        <Router>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route
+              path="/app/*"
+              element={
+                <AppLayout>
+                  {errorMessage && (
+                    <ErrorNotification>
+                      <ErrorIcon>⚠️</ErrorIcon>
+                      <ErrorText>{errorMessage}</ErrorText>
+                      <CloseButton onClick={() => setErrorMessage(null)}>×</CloseButton>
+                    </ErrorNotification>
+                  )}
+                  {error && <ErrorMessage>{error}</ErrorMessage>}
+                  {scoringError && <ErrorMessage>{scoringError}</ErrorMessage>}
+                  {leadsError && <ErrorMessage>{leadsError}</ErrorMessage>}
+                  
+                  <FormContainer>
+                    <FormTitle>SEO Backlink Builder</FormTitle>
+                    <TextArea 
+                      value={article}
+                      onChange={(e) => setArticle(e.target.value)}
+                      placeholder="Paste your SEO article here..."
+                    />
+                    <ButtonGroup>
+                      <PrimaryButton 
+                        $primary 
+                        onClick={() => {
+                          handleAnalyze();
+                          setActiveTab('analysis');
+                        }} 
+                        disabled={!article.trim() || loading || scoringLoading || leadsLoading}
                       >
-                        {leadsLoading ? 'Searching...' : 'Show Me Leads'}
-                      </StyledButton>
-                    </ButtonContainer>
-                  </Card>
+                        {loading ? 'Analyzing...' : 'Analyze Article'}
+                      </PrimaryButton>
+                      <PrimaryButton 
+                        onClick={() => {
+                          handleRateCopy();
+                          setActiveTab('rating');
+                        }} 
+                        disabled={!article.trim() || loading || scoringLoading || leadsLoading}
+                      >
+                        {scoringLoading ? 'Rating...' : 'Rate My Copy'}
+                      </PrimaryButton>
+                    </ButtonGroup>
+                  </FormContainer>
                   
-                  <Card>
-                    <CardTitle>Recommended Websites</CardTitle>
-                    <List>
-                      {results.websites && results.websites.map((website, index) => (
-                        <ListItem key={index}>
-                          <a 
-                            href={website.startsWith('http') ? website : `https://${website}`} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
+                  {(results || analysisResults) && activeTab === 'analysis' && (
+                    <ResultsContainer>
+                      <Card>
+                        <CardTitle>Identified Themes</CardTitle>
+                        <List>
+                          {(results?.subjects || analysisResults?.subjects || []).map((subject, index) => (
+                            <ListItem key={index}>{subject}</ListItem>
+                          ))}
+                        </List>
+                        <ButtonContainer>
+                          <PrimaryButton 
+                            onClick={handleSearchLeads}
+                            disabled={leadsLoading}
                           >
-                            {website}
-                          </a>
-                        </ListItem>
-                      ))}
-                    </List>
-                  </Card>
-                </ResultsContainer>
-              )}
-              
-              {showLeads && activeTab === 'analysis' && (
-                <LeadResultsContainer>
-                  <LeadSectionTitle>Potential Leads</LeadSectionTitle>
-                  {leadsLoading ? (
-                    <LoadingMessage>Searching for relevant leads...</LoadingMessage>
-                  ) : (
-                    <LeadGrid leads={leads} />
-                  )}
-                </LeadResultsContainer>
-              )}
-              
-              {copyScores && activeTab === 'rating' && (
-                <ScoreDashboard>
-                  <ScoreHeader>
-                    <ScoreTitle>Copy Quality Assessment</ScoreTitle>
-                    <OverallScore $score={copyScores.overallScore}>
-                      {copyScores.overallScore}/100
-                    </OverallScore>
-                  </ScoreHeader>
-                  
-                  {copyScores.improvement && (
-                    <div style={{ 
-                      backgroundColor: '#F0FFF4', 
-                      padding: '1rem', 
-                      borderRadius: '0.5rem',
-                      marginBottom: '1.5rem',
-                      border: '2px solid #38A169'
-                    }}>
-                      <h4 style={{ marginTop: 0, marginBottom: '0.5rem', fontFamily: 'Courier, monospace' }}>
-                        Improvement Suggestions
-                      </h4>
-                      <p style={{ margin: 0 }}>{copyScores.improvement}</p>
-                    </div>
-                  )}
-                  
-                  {copyScores.categories && copyScores.categories.map((category, index) => (
-                    <CategoryScoreCard key={index}>
-                      <CategoryHeader>
-                        <CategoryName>{category.name}</CategoryName>
-                        <CategoryScore $score={category.score} $maxScore={category.maxScore}>
-                          {category.score}/{category.maxScore}
-                        </CategoryScore>
-                      </CategoryHeader>
+                            {leadsLoading ? 'Searching...' : 'Show Me Leads'}
+                          </PrimaryButton>
+                        </ButtonContainer>
+                      </Card>
                       
-                      <ScoreCardLayout>
-                        <ScoreDetails>
-                          <SubcategoriesList>
-                            {category.subcategories.map((sub, subIndex) => (
-                              <SubcategoryItem key={subIndex}>
-                                <SubcategoryName>{sub.name}</SubcategoryName>
-                                <SubcategoryScore $score={sub.score} $maxScore={sub.maxScore}>
-                                  {sub.score}/{sub.maxScore}
-                                </SubcategoryScore>
-                              </SubcategoryItem>
-                            ))}
-                          </SubcategoriesList>
+                      <Card>
+                        <CardTitle>Recommended Websites</CardTitle>
+                        <List>
+                          {(results?.websites || analysisResults?.websites || []).map((website, index) => (
+                            <ListItem key={index}>
+                              <a 
+                                href={website.startsWith('http') ? website : `https://${website}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                              >
+                                {website}
+                              </a>
+                            </ListItem>
+                          ))}
+                        </List>
+                      </Card>
+                    </ResultsContainer>
+                  )}
+                  
+                  {showLeads && activeTab === 'analysis' && (
+                    <LeadResultsContainer>
+                      <LeadSectionTitle>Potential Leads</LeadSectionTitle>
+                      {leadsLoading ? (
+                        <LoadingMessage>Searching for relevant leads...</LoadingMessage>
+                      ) : (
+                        <LeadGrid leads={leads} />
+                      )}
+                    </LeadResultsContainer>
+                  )}
+                  
+                  {copyScores && activeTab === 'rating' && (
+                    <ScoreDashboard>
+                      <ScoreHeader>
+                        <ScoreTitle>Copy Quality Assessment</ScoreTitle>
+                        <OverallScore $score={copyScores.overallScore}>
+                          {copyScores.overallScore}/100
+                        </OverallScore>
+                      </ScoreHeader>
+                      
+                      {copyScores.improvement && (
+                        <div style={{ 
+                          backgroundColor: '#F0FFF4', 
+                          padding: '1rem', 
+                          borderRadius: '0.5rem',
+                          marginBottom: '1.5rem',
+                          border: '2px solid #38A169'
+                        }}>
+                          <h4 style={{ marginTop: 0, marginBottom: '0.5rem', fontFamily: 'Courier, monospace' }}>
+                            Improvement Suggestions
+                          </h4>
+                          <p style={{ margin: 0 }}>{copyScores.improvement}</p>
+                        </div>
+                      )}
+                      
+                      {copyScores.categories && copyScores.categories.map((category, index) => (
+                        <CategoryScoreCard key={index}>
+                          <CategoryHeader>
+                            <CategoryName>{category.name}</CategoryName>
+                            <CategoryScore $score={category.score} $maxScore={category.maxScore}>
+                              {category.score}/{category.maxScore}
+                            </CategoryScore>
+                          </CategoryHeader>
                           
-                          {renderCategoryChart(category, index)}
-                        </ScoreDetails>
-                        
-                        <ChartContainer>
-                          <ChartErrorBoundary>
-                            <RadarChart 
-                              data={{
-                                labels: category.subcategories.map(sub => sub.name),
-                                datasets: [
-                                  {
-                                    label: category.name,
-                                    data: category.subcategories.map(sub => sub.score),
-                                    backgroundColor: `rgba(${category.name === 'Content Quality' 
-                                      ? '56, 161, 105, 0.2' 
-                                      : '214, 158, 46, 0.2'})`,
-                                    borderColor: `${category.name === 'Content Quality' 
-                                      ? '#38A169' 
-                                      : '#D69E2E'}`,
-                                    borderWidth: 2,
-                                    pointBackgroundColor: `${category.name === 'Content Quality' 
-                                      ? '#38A169' 
-                                      : '#D69E2E'}`,
-                                    pointBorderColor: '#fff',
-                                    pointHoverBackgroundColor: '#fff',
-                                    pointHoverBorderColor: `${category.name === 'Content Quality' 
-                                      ? '#38A169' 
-                                      : '#D69E2E'}`,
-                                  }
-                                ]
-                              }}
-                              categoryName={`category-${index}`}
-                            />
-                          </ChartErrorBoundary>
-                        </ChartContainer>
-                      </ScoreCardLayout>
-                    </CategoryScoreCard>
-                  ))}
-                </ScoreDashboard>
-              )}
-              
-              {loading && (
-                <LoadingOverlay>
-                  <LoadingSpinner />
-                  <LoadingQuoteBox>
-                    <LoadingTitle>Analyzing Article</LoadingTitle>
-                    <QuoteText>"{currentQuote}"</QuoteText>
-                    <ProgressBarContainer>
-                      <ProgressBar />
-                    </ProgressBarContainer>
-                  </LoadingQuoteBox>
-                </LoadingOverlay>
-              )}
-              
-              {scoringLoading && (
-                <LoadingOverlay>
-                  <LoadingSpinner />
-                  <LoadingQuoteBox>
-                    <LoadingTitle>Analyzing Your Copy</LoadingTitle>
-                    <QuoteText>"{currentQuote}"</QuoteText>
-                    <ProgressBarContainer>
-                      <ProgressBar />
-                    </ProgressBarContainer>
-                  </LoadingQuoteBox>
-                </LoadingOverlay>
-              )}
-            </AppLayout>
-          } 
-        />
-        
-        {/* Redirect any other routes to home */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
+                          <ScoreCardLayout>
+                            <ScoreDetails>
+                              <SubcategoriesList>
+                                {category.subcategories.map((sub, subIndex) => (
+                                  <SubcategoryItem key={subIndex}>
+                                    <SubcategoryName>{sub.name}</SubcategoryName>
+                                    <SubcategoryScore $score={sub.score} $maxScore={sub.maxScore}>
+                                      {sub.score}/{sub.maxScore}
+                                    </SubcategoryScore>
+                                  </SubcategoryItem>
+                                ))}
+                              </SubcategoriesList>
+                              
+                              {renderCategoryChart(category, index)}
+                            </ScoreDetails>
+                            
+                            <ChartContainer>
+                              <ChartErrorBoundary>
+                                <RadarChart 
+                                  data={{
+                                    labels: category.subcategories.map(sub => sub.name),
+                                    datasets: [
+                                      {
+                                        label: category.name,
+                                        data: category.subcategories.map(sub => sub.score),
+                                        backgroundColor: `rgba(${category.name === 'Content Quality' 
+                                          ? '56, 161, 105, 0.2' 
+                                          : '214, 158, 46, 0.2'})`,
+                                        borderColor: `${category.name === 'Content Quality' 
+                                          ? '#38A169' 
+                                          : '#D69E2E'}`,
+                                        borderWidth: 2,
+                                        pointBackgroundColor: `${category.name === 'Content Quality' 
+                                          ? '#38A169' 
+                                          : '#D69E2E'}`,
+                                        pointBorderColor: '#fff',
+                                        pointHoverBackgroundColor: '#fff',
+                                        pointHoverBorderColor: `${category.name === 'Content Quality' 
+                                          ? '#38A169' 
+                                          : '#D69E2E'}`,
+                                      }
+                                    ]
+                                  }}
+                                  categoryName={`category-${index}`}
+                                />
+                              </ChartErrorBoundary>
+                            </ChartContainer>
+                          </ScoreCardLayout>
+                        </CategoryScoreCard>
+                      ))}
+                    </ScoreDashboard>
+                  )}
+                  
+                  {loading && (
+                    <LoadingOverlay>
+                      <LoadingSpinner />
+                      <LoadingQuoteBox>
+                        <LoadingTitle>Analyzing Article</LoadingTitle>
+                        <QuoteText>"{currentQuote}"</QuoteText>
+                        <ProgressBarContainer>
+                          <ProgressBar />
+                        </ProgressBarContainer>
+                      </LoadingQuoteBox>
+                    </LoadingOverlay>
+                  )}
+                  
+                  {scoringLoading && (
+                    <LoadingOverlay>
+                      <LoadingSpinner />
+                      <LoadingQuoteBox>
+                        <LoadingTitle>Analyzing Your Copy</LoadingTitle>
+                        <QuoteText>"{currentQuote}"</QuoteText>
+                        <ProgressBarContainer>
+                          <ProgressBar />
+                        </ProgressBarContainer>
+                      </LoadingQuoteBox>
+                    </LoadingOverlay>
+                  )}
+                </AppLayout>
+              }
+            />
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </Router>
+      </GlobalErrorBoundary>
+      <ToastContainer 
+        position="top-right" 
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
+    </>
   );
 }
 
@@ -1136,6 +1300,44 @@ const LoadingMessage = styled.div`
   padding: 2rem;
   color: #666;
   font-style: italic;
+`;
+
+const ErrorNotification = styled.div`
+  display: flex;
+  align-items: center;
+  padding: ${props => props.theme?.spacing?.md || '1rem'} ${props => props.theme?.spacing?.lg || '1.5rem'};
+  background-color: ${props => (props.theme?.colors?.error ? `${props.theme.colors.error}20` : '#FED7D7')};
+  border: 1px solid ${props => props.theme?.colors?.error || '#E53E3E'};
+  border-radius: ${props => props.theme?.borderRadius?.md || '0.375rem'};
+  margin-bottom: ${props => props.theme?.spacing?.lg || '1.5rem'};
+`;
+
+const ErrorIcon = styled.span`
+  font-size: 1.5rem;
+  margin-right: ${props => props.theme?.spacing?.md || '1rem'};
+`;
+
+const ErrorText = styled.div`
+  flex: 1;
+  font-family: ${props => props.theme?.typography?.fontFamily?.body || 'system-ui, sans-serif'};
+  color: ${props => props.theme?.colors?.error || '#E53E3E'};
+`;
+
+const CloseButton = styled.button`
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: ${props => props.theme?.colors?.error || '#E53E3E'};
+  padding: 0 ${props => props.theme?.spacing?.sm || '0.5rem'};
+  
+  &:hover {
+    opacity: 0.8;
+  }
+  
+  &:focus {
+    outline: none;
+  }
 `;
 
 export default App; 

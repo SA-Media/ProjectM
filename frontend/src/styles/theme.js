@@ -18,6 +18,14 @@ export const theme = {
       primary: '#1A1A1A',
       secondary: '#4A4A4A',
       light: '#FFFFFF',
+    },
+    error: '#E53E3E',
+    warning: '#F6AD55',
+    success: '#38A169',
+    border: {
+      light: '#e2e8f0',
+      medium: '#cbd5e0',
+      dark: '#718096',
     }
   },
   typography: {
