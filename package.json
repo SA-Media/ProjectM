@@ -13,7 +13,6 @@
     "concurrently": "^8.2.0"
   },
   "dependencies": {
-    "18": "0.0.0",
     "chart.js": "^4.4.8",
     "chromedriver": "^133.0.1",
     "openai": "^4.85.1",

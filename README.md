@@ -6,7 +6,7 @@ A comprehensive tool for analyzing SEO content, building backlinks, and discover
 - [Overview](#overview)
 - [Features](#features)
 - [System Requirements](#system-requirements)
-- [Installation](#installation)
+- [Quick Start Guide](#quick-start-guide)
 - [Project Structure](#project-structure)
 - [API Documentation](#api-documentation)
 - [Technologies](#technologies)
@@ -28,55 +28,79 @@ The SEO Backlink Builder is a full-stack application designed to help users anal
 ## System Requirements
 
 - Node.js >= 18.0.0
-- MySQL database server
+- npm (included with Node.js)
+- MySQL database server (installed and running)
 - Chrome browser (for Selenium WebDriver features)
 
-## Installation
+## Quick Start Guide
 
-### Quick Start
+### 1. Clone the Repository
 
-1. Clone the repository from GitHub:
-   ```
-   git clone https://github.com/your-username/seo-backlink-builder.git
-   cd seo-backlink-builder
-   ```
+```bash
+git clone https://github.com/your-username/seo-backlink-builder.git
+cd seo-backlink-builder
+```
 
-2. Install dependencies for both frontend and backend:
-   ```
-   npm install
-   ```
+### 2. Database Setup
 
-3. Configure environment variables:
-   Create a `.env` file in the root directory with the following variables:
+1. Ensure your MySQL server is running
+2. Create a database named `leads_db`:
+   ```sql
+   CREATE DATABASE leads_db;
    ```
-   # Database Configuration
-   DB_HOST=127.0.0.1
-   DB_USER=root
-   DB_PASSWORD=password
-   DB_NAME=leads_db
-   DB_PORT=3306
+3. Make note of your MySQL credentials for the next step
+
+### 3. Configure Backend Environment
+
+Create a `.env` file in the backend directory with the following content:
+
+```
+# Database Configuration
+DB_HOST=127.0.0.1
+DB_USER=root
+DB_PASSWORD=password
+DB_NAME=leads_db
+DB_PORT=3306
    
-   # API Keys
-   HYPERBOLIC_API_KEY=your_api_key_here
+# API Keys
+HYPERBOLIC_API_KEY=your_api_key_here
    
-   # Other Configuration
-   PORT=5000
-   FRONTEND_URL=http://localhost:3000
-   ```
+# Other Configuration
+PORT=5000
+FRONTEND_URL=http://localhost:3000
+```
 
-4. Set up the MySQL database:
-   - Ensure your MySQL server is running
-   - Create a database named `leads_db` (or as specified in your `.env`)
-   - The application will automatically create necessary tables on startup
+⚠️ **Important**: Adjust the database credentials to match your MySQL setup.
 
-5. Start the development server:
-   ```
-   npm run dev
-   ```
+### 4. Install Dependencies
 
-6. Access the application:
-   - Frontend: [http://localhost:3000](http://localhost:3000)
-   - Backend API: [http://localhost:5000](http://localhost:5000)
+From the root directory, install all dependencies for both frontend and backend:
+
+```bash
+# Install root and workspace dependencies
+npm install
+```
+
+All necessary packages are included in the package.json files:
+- Frontend includes react-toastify, chart.js, react-chartjs-2, etc.
+- Backend includes express, mysql2, selenium-webdriver, etc.
+
+### 5. Start the Application
+
+From the root directory, start both services with a single command:
+
+```bash
+npm run dev
+```
+
+This will concurrently start:
+- Backend server on http://localhost:5000
+- Frontend dev server on http://localhost:3000
+
+### 6. Access the Application
+
+- Frontend: [http://localhost:3000](http://localhost:3000)
+- Backend API: [http://localhost:5000](http://localhost:5000)
 
 ## Project Structure
 
@@ -237,7 +261,7 @@ Additional endpoints are available for updating, deleting, and managing leads.
 
 ### Running in Development Mode
 
-```
+```bash
 npm run dev
 ```
 
@@ -245,7 +269,7 @@ This starts both the frontend and backend in development mode with hot-reloading
 
 ### Building for Production
 
-```
+```bash
 # Build the frontend
 cd frontend
 npm run build
@@ -257,20 +281,58 @@ npm start
 
 ## Troubleshooting
 
-### Common Issues
+### Port Already in Use
 
-1. **Database Connection Issues**
-   - Ensure your MySQL server is running
-   - Verify credentials in `.env` are correct
-   - Check if the database exists
+If you get an error that the port is already in use:
 
-2. **API Connection Issues**
-   - Verify that the backend server is running
-   - Check for CORS issues in the browser console
-   - Confirm that the frontend is using the correct API URL
+```bash
+# Find the process using the port
+lsof -i :3000    # For frontend port
+lsof -i :5000    # For backend port
 
-3. **Selenium WebDriver Issues**
-   - Ensure you have ChromeDriver installed and it matches your Chrome version
-   - Check that Chrome is installed and accessible
+# Kill the process
+kill [PID]       # Replace [PID] with the process ID from the above command
+```
+
+### Database Connection Issues
+
+- Ensure your MySQL server is running with `mysql.server status` or equivalent for your OS
+- Verify the credentials in the `.env` file match your MySQL setup
+- Check MySQL connection: `mysql -u root -p leads_db`
+- Check if the database exists
+
+### Node.js Version Issues
+
+If you see npm warnings about Node.js version:
+1. Consider using nvm (Node Version Manager) to install Node.js v18:
+   ```bash
+   nvm install 18
+   nvm use 18
+   ```
+2. Then restart the setup process
+
+### API Connection Issues
+
+- Verify that the backend server is running
+- Check for CORS issues in the browser console
+- Confirm that the frontend is using the correct API URL
+
+### Selenium WebDriver Issues
+
+- Ensure you have ChromeDriver installed and it matches your Chrome version
+- Check that Chrome is installed and accessible
+
+### Missing Dependencies
+
+If you encounter errors about missing modules (unlikely with this setup):
+
+```bash
+# From the project root
+npm install
+
+# Or install a specific package
+npm install [package-name] --workspace=frontend
+npm install [package-name] --workspace=backend
+```
 
 For additional help, please open an issue on the GitHub repository. 
